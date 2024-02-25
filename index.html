@@ -1,0 +1,185 @@
+<meta charset="utf8">
+<style>
+	
+	* {
+
+		transition: all 0.2s ease-in-out;
+	
+	}
+
+</style>
+
+<p>
+	<progress id="target_progress" value="0" max="1250" style="width:100%;">
+</p>
+
+<span id="target">...</span>
+
+<p>
+	<button onclick="start_record()">start record</button>
+</p>
+
+<p>
+
+	<p id="target_player">...</p>
+
+	<audio controls id="target_audio" style="width:50%">
+		<source id="target_source">
+	</audio>
+
+</p>
+
+<script type="text/javascript">
+
+	let count = 0 // variable global
+
+	;( async () => {
+
+		recorder = await recordAudio() // recordAudio est une fonction async, je doit mettre un await devant
+
+		// 🢁 ici, l'instance MediaRecorder est lancé dès le chargement de la page
+		// c'est pour ça que le navigateur web demande l'autorisation pour le micro
+		// mais l'enregistrement n'a pas encore commencé
+
+	})()
+
+	//
+	
+	function recordAudio(){
+
+		return new Promise(resolve => {
+
+			navigator.mediaDevices.getUserMedia({ audio: true })
+
+			.then( stream => {
+
+				const mediaRecorder = new MediaRecorder(stream)
+
+				// 🢁 l'instance MediaRecorder est crée ici
+
+				const audioChunks = []
+
+				mediaRecorder.addEventListener("dataavailable", event => {
+					
+					audioChunks.push(event.data)
+
+					// 🢁 pendant l'enregistrement, ce tableau ( list en python ) est rempli petit a petit
+		
+				})
+
+				const start = () => {
+
+					mediaRecorder.start()
+				}
+
+				const stop = () => {
+
+					return new Promise( resolve => {
+
+						mediaRecorder.addEventListener( "stop", async () => {
+
+							const audioBlob = new Blob(audioChunks)
+
+							// 🢁 les données brut qui ont été enregistré par le micro
+							
+							const audioUrl = URL.createObjectURL(audioBlob)
+
+							// 🢁 une autre manière de transformer les données brut en audio exploitable
+
+							let bas64_audio = await convert_blob_to_base64(audioBlob)
+
+							// 🢁 je récupère ici la chaine de charactères en format base64
+
+							resolve( { audioUrl:audioUrl, bas64_audio:bas64_audio } )
+
+							// 🢁 je retourne comme valeur un objet ( dictionnaire en python ) contenant les clés "audioUrl" et "bas64_audio"
+							// et leurs valeurs respectives
+
+							// resolve, c'est comme "return" mais pour les "promise" / function async
+
+						})
+
+						mediaRecorder.stop()
+
+					})
+
+				}
+
+				resolve({ start, stop })
+
+			})
+		})
+	}
+
+	function convert_blob_to_base64(audioBlob){ // convertit les données brut en chaine de charactères en format base64
+
+		// 🢃 new Promise, c'est la même chose qu'une fonction asyncrone
+
+		return new Promise( resolve => {
+
+			let reader = new window.FileReader()
+			reader.readAsDataURL(audioBlob) 
+			reader.onloadend = function() {
+
+				let result = reader.result
+				resolve(result.split(",")[1])
+
+			}
+
+		})
+
+	}
+
+	async function start_record(){
+
+		recorder.start() // lance l'enregistrement
+
+		document.getElementById("target").innerText = "recording has started"
+
+		let progress_value = 0 // valeur de la barre de progression
+		
+		let refreshId_progress = setInterval( function(){
+		
+			progress_value++
+			
+			document.getElementById("target_progress").value = progress_value
+		
+		}) // c'est ça qui fait avancer la barre de progression dans le temps
+
+		// 🢃 ici c'est le timer, que j'ai mis a 5 secondes
+
+		let refreshId = setInterval( async function(){
+
+			console.log(count)
+			count++
+
+			if( count >= 5 ) { // au bout de 5 secondes, je stop la boucle
+
+				clearInterval(refreshId) // stop les deux setInterval / loop / timer
+				clearInterval(refreshId_progress) // stop les deux setInterval / loop / timer
+
+				const result = await recorder.stop()
+
+				// 🢁 l'enregistrement est terminé, je récupère dans la variable "result" le résultat de l'enregistrement
+
+				// l'enregistrement est en deux format, audioUrl et base64 ( les deux marche très bien, j'utlise base64 )
+
+				console.log(result)
+		
+				document.getElementById("target_source").src = "data:audio/ogg;base64," + result.bas64_audio
+
+				document.getElementById("target_audio").load()
+
+				//
+		
+				document.getElementById("target").innerText = "recording is complete"
+
+				document.getElementById("target_player").innerText = "you can player your record here"
+
+			}
+
+		}, 1000 ) // 1000 ms = 1 seconde // la boucle setInterval s'execute tout les secondes
+
+	}
+
+</script>
